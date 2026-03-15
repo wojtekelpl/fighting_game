@@ -2,26 +2,29 @@ import pygame
 import random
 import json
 import os
+import sys
 from player import Player
 from enemy import Enemy
+
+
 class Game:
     """Główna klasa gry zarządzająca wszystkimi elementami"""
-    
+
+    # Kolory
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    GRAY = (128, 128, 128)
+    RED = (255, 0, 0)
+    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)
+    YELLOW = (255, 255, 0)
+    PURPLE = (128, 0, 128)
+
     def __init__(self, screen):
         self.screen = screen
         self.screen_width = screen.get_width()
         self.screen_height = screen.get_height()
-        
-        # Kolory
-        self.WHITE = (255, 255, 255)
-        self.BLACK = (0, 0, 0)
-        self.GRAY = (128, 128, 128)
-        self.RED = (255, 0, 0)
-        self.GREEN = (0, 255, 0)
-        self.BLUE = (0, 0, 255)
-        self.YELLOW = (255, 255, 0)
-        self.PURPLE = (128, 0, 128)
-        
+
         # Fonty
         self.font_large = pygame.font.Font(None, 48)
         self.font_medium = pygame.font.Font(None, 36)
@@ -64,7 +67,6 @@ class Game:
         elif key == pygame.K_ESCAPE:
             self.save_game()
             pygame.quit()
-            exit()
             sys.exit()
     
     def handle_fight_input(self, key):
@@ -100,26 +102,7 @@ class Game:
             self.state = "menu"
         elif key >= pygame.K_1 and key <= pygame.K_9:
             skin_index = key - pygame.K_1
-            if skin_index < len(self.player.available_skins):
-                skin = self.player.available_skins[skin_index]
-                if skin["unlocked"]:
-                    if skin_index != self.player.current_skin:
-                        self.player.current_skin = skin_index
-                        self.player.update_stats()
-                        self.battle_messages = [f"Założyłeś skin: {skin['name']}!"]
-                        self.message_timer = 120
-                else:
-                    # Próba kupna skina
-                    if self.player.gold >= skin["price"]:
-                        self.player.gold -= skin["price"]
-                        skin["unlocked"] = True
-                        self.player.current_skin = skin_index
-                        self.player.update_stats()
-                        self.battle_messages = [f"Kupiłeś i założyłeś skin: {skin['name']}!"]
-                        self.message_timer = 120
-                    else:
-                        self.battle_messages = [f"Nie masz wystarczająco złota! Potrzebujesz {skin['price']} złota."]
-                        self.message_timer = 120
+            self.buy_skin(skin_index)
     
     def start_fight(self):
         """Rozpocznij walkę z nowym przeciwnikiem"""
@@ -135,25 +118,7 @@ class Game:
             
         damage = self.player.attack_enemy(self.current_enemy)
         self.battle_messages.append(f"Zadałeś {damage} obrażeń!")
-        
-        if self.current_enemy.is_alive():
-            enemy_damage = self.current_enemy.attack_player(self.player)
-            self.battle_messages.append(f"{self.current_enemy.name} zadał Ci {enemy_damage} obrażeń!")
-            
-            if not self.player.is_alive():
-                self.battle_messages.append("Zostałeś pokonany!")
-                self.player.respawn()
-        else:
-            exp_gained = self.current_enemy.exp_reward
-            gold_gained = self.current_enemy.gold_reward
-            self.player.gain_experience(exp_gained)
-            self.player.gold += gold_gained
-            self.battle_messages.append(f"Pokonałeś {self.current_enemy.name}!")
-            self.battle_messages.append(f"Zdobyłeś {exp_gained} doświadczenia i {gold_gained} złota!")
-            
-            if self.player.check_level_up():
-                self.battle_messages.append(f"Awansowałeś na poziom {self.player.level}!")
-        
+        self._handle_enemy_counter_attack()
         self.message_timer = 180  # 3 sekundy
     
     def player_defend(self):
@@ -182,11 +147,15 @@ class Game:
             
         damage = self.player.special_attack(self.current_enemy)
         self.battle_messages.append(f"Specjalny atak! Zadałeś {damage} obrażeń!")
-        
+        self._handle_enemy_counter_attack()
+        self.message_timer = 180
+
+    def _handle_enemy_counter_attack(self):
+        """Obsługa kontrataku przeciwnika lub nagrody za pokonanie"""
         if self.current_enemy.is_alive():
             enemy_damage = self.current_enemy.attack_player(self.player)
             self.battle_messages.append(f"{self.current_enemy.name} zadał Ci {enemy_damage} obrażeń!")
-            
+
             if not self.player.is_alive():
                 self.battle_messages.append("Zostałeś pokonany!")
                 self.player.respawn()
@@ -197,23 +166,23 @@ class Game:
             self.player.gold += gold_gained
             self.battle_messages.append(f"Pokonałeś {self.current_enemy.name}!")
             self.battle_messages.append(f"Zdobyłeś {exp_gained} doświadczenia i {gold_gained} złota!")
-            
+
             if self.player.check_level_up():
                 self.battle_messages.append(f"Awansowałeś na poziom {self.player.level}!")
-        
-        self.message_timer = 180
     
     def buy_skin(self, skin_index):
-        """Kup skin"""
+        """Kup lub załóż skin"""
         if skin_index < len(self.player.available_skins):
             skin = self.player.available_skins[skin_index]
             if skin["unlocked"]:
                 self.player.current_skin = skin_index
+                self.player.update_stats()
                 self.battle_messages = [f"Założyłeś skin: {skin['name']}"]
             elif self.player.gold >= skin["price"]:
                 self.player.gold -= skin["price"]
                 skin["unlocked"] = True
                 self.player.current_skin = skin_index
+                self.player.update_stats()
                 self.battle_messages = [f"Kupiłeś i założyłeś skin: {skin['name']}"]
             else:
                 self.battle_messages = [f"Nie masz wystarczająco złota na {skin['name']}"]
